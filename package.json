@@ -1,7 +1,7 @@
 {
   "name": "getrx",
-  "version": "1.0.0",
-  "description": "",
+  "version": "0.0.1",
+  "description": "Sublimely simple state management library for React.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -14,9 +14,16 @@
     "build": "tsc",
     "dev": "tsc --watch"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "react",
+    "state",
+    "management",
+    "state management",
+    "reactive",
+    "ui",
+    "hooks"
+  ],
+  "author": "Antonio Peña Peña",
   "devDependencies": {
     "@types/node": "^24.0.3",
     "@types/react": "^19.1.8",
