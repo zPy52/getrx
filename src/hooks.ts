@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { GetRxCache } from "./cache";
+import { Get } from "./cache";
 import type { GetRxController } from "./controller";
 import type { ObsEmitter, GetRxControllerFactory } from "./types";
 
@@ -34,7 +34,7 @@ export function useOnObsChange<T>(obs: ObsEmitter<T>): T | undefined {
 export function useGetFind<T extends GetRxController>(
   tag: string
 ): T | undefined {
-  return useMemo(() => GetRxCache.find<T>(tag), [tag]);
+  return useMemo(() => Get.find<T>(tag), [tag]);
 }
 
 /**
@@ -59,13 +59,13 @@ export function useGetPut<T extends GetRxController>(
   if (!persist) {
     useEffect(() => {
       return () => {
-        GetRxCache.delete<T>(tag);
+        Get.delete<T>(tag);
       };
     }, [tag, factoryCallback, persist]);
   }
 
   return useMemo(
-    () => GetRxCache.put<T>(tag, factoryCallback),
+    () => Get.put<T>(tag, factoryCallback),
     [tag, factoryCallback, persist]
   );
 }
