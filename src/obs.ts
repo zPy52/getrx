@@ -10,7 +10,21 @@ export class Obs<T> implements ObsEmitter<T> {
   }
 
   public get value(): T | undefined {
+    return this.get();
+  }
+
+  public get(): T | undefined {
     return this.currentValue;
+  }
+
+  public set value(value: T) {
+    this.set(value);
+  }
+
+  public set(value: T) {
+    this.currentValue = value;
+    this.eventHandlers.forEach(listener => listener(value));
+    
   }
 
   public on(listener: ObsListener<T>) {
@@ -18,11 +32,6 @@ export class Obs<T> implements ObsEmitter<T> {
     if (this.currentValue !== undefined) {
       listener(this.currentValue);
     }
-  }
-
-  public emit(value: T) {
-    this.currentValue = value;
-    this.eventHandlers.forEach(listener => listener(value));
   }
 
   public off(listener: ObsListener<T>) {

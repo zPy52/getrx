@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import type { ObsEmitter } from "./types";
 import { GetRxCache } from "./cache";
-import type { GetRxControllerFactory } from "./types";
 import type { GetRxController } from "./controller";
+import type { ObsEmitter, GetRxControllerFactory } from "./types";
 
 /**
  * React hook that subscribes to an ObsEmitter and returns its latest value.
