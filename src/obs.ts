@@ -29,7 +29,7 @@ export class Obs<T> implements ObsEmitter<T> {
     this.eventHandlers = this.eventHandlers.filter(l => l !== listener);
   }
 
-  public obs(): T | undefined {
+  public use(): T | undefined {
     return useOnObsChange(this);
   }
 }
