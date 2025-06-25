@@ -25,6 +25,7 @@
   ],
   "author": "Antonio Peña Peña",
   "license": "Apache-2.0",
+  "homepage": "https://github.com/zPy52/getrx",
   "devDependencies": {
     "@types/node": "^24.0.3",
     "@types/react": "^19.1.8",
