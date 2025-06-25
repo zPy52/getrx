@@ -52,8 +52,10 @@ export function useGetFind<T extends GetRxController>(
 export function useGetPut<T extends GetRxController>(
   tag: string,
   factory: GetRxControllerFactory<T>,
-  { persist = false }: { persist?: boolean }
+  options: { persist?: boolean } = {}
 ): T {
+  const { persist = false } = options;
+
   const factoryCallback = useCallback(factory, [factory]);
 
   if (!persist) {
