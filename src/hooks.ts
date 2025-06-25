@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
 import { Get } from "./cache";
 import type { GetRxController } from "./controller";
 import type { ObsEmitter, GetRxControllerFactory } from "./types";
+import { useState, useEffect, useCallback, useMemo } from "react";
 
 /**
  * React hook that subscribes to an ObsEmitter and returns its latest value.
@@ -57,27 +57,31 @@ export function useGetPut<T extends GetRxController>(
   factory: GetRxControllerFactory<T>,
   options: { persist?: boolean } = {}
 ): T {
-  const controller = useMemo(() => Get.exists(tag) ? Get.find<T>(tag) : undefined, [tag]);
+  // Memoise the factory so that its identity stays stable across renders
+  const factoryCallback = useCallback(factory, []);
 
-  if (controller !== undefined) {
-    return controller;
-  }
+  // Create or retrieve the controller in a single place to guarantee that the
+  // same hooks (useCallback ➔ useMemo ➔ useEffect) are always executed in the
+  // same order, regardless of whether the controller already exists.
+  const controller = useMemo(() => {
+    if (Get.exists(tag)) {
+      return Get.find<T>(tag) as T;
+    }
+
+    return Get.put<T>(tag, factoryCallback);
+  }, [tag, factoryCallback]);
 
   const { persist = false } = options;
 
-  const factoryCallback = useCallback(factory, [factory]);
-
-
+  // Remove the controller from the cache when the component unmounts unless
+  // the caller explicitly wants it to persist.
   useEffect(() => {
-    if (!persist) {
-      return () => {
-        Get.delete<T>(tag);
-      };
-    }
-  }, [tag, factoryCallback, persist]);
+    if (persist) return;
 
-  return useMemo(
-    () => Get.put<T>(tag, factoryCallback),
-    [tag, factoryCallback, persist]
-  );
+    return () => {
+      Get.delete<T>(tag);
+    };
+  }, [tag, persist]);
+
+  return controller;
 }
