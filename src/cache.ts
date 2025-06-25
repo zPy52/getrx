@@ -98,4 +98,9 @@ export class Get {
       this.registry.delete(key);
     }
   }
+
+  public static exists(tag: string): boolean {
+    const key = this.makeKey(tag);
+    return this.registry.has(key);
+  }
 }

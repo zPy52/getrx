@@ -44,6 +44,9 @@ export function useGetFind<T extends GetRxController>(
  * when the component using this hook unmounts. If `persist` is true, the controller will remain
  * in the cache after unmount.
  *
+ * If a controller instance already exists in the cache for the given tag, this hook will fallback to
+ * using `useGetFind` to retrieve it instead of creating a new one.
+ *
  * @param tag       The tag to differentiate multiple instances.
  * @param factory   The controller factory function.
  * @param options   Optional options object. If `persist` is true, the controller is not deleted on unmount.
@@ -54,6 +57,11 @@ export function useGetPut<T extends GetRxController>(
   factory: GetRxControllerFactory<T>,
   options: { persist?: boolean } = {}
 ): T {
+  if (Get.exists(tag)) {
+    // Fallback to useGetFind if the controller already exists in the cache
+    return useGetFind<T>(tag)!;
+  }
+
   const { persist = false } = options;
 
   const factoryCallback = useCallback(factory, [factory]);
