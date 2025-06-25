@@ -57,22 +57,24 @@ export function useGetPut<T extends GetRxController>(
   factory: GetRxControllerFactory<T>,
   options: { persist?: boolean } = {}
 ): T {
-  if (Get.exists(tag)) {
-    // Fallback to useGetFind if the controller already exists in the cache
-    return useGetFind<T>(tag)!;
+  const controller = useMemo(() => Get.exists(tag) ? Get.find<T>(tag) : undefined, [tag]);
+
+  if (controller !== undefined) {
+    return controller;
   }
 
   const { persist = false } = options;
 
   const factoryCallback = useCallback(factory, [factory]);
 
-  if (!persist) {
-    useEffect(() => {
+
+  useEffect(() => {
+    if (!persist) {
       return () => {
         Get.delete<T>(tag);
       };
-    }, [tag, factoryCallback, persist]);
-  }
+    }
+  }, [tag, factoryCallback, persist]);
 
   return useMemo(
     () => Get.put<T>(tag, factoryCallback),
