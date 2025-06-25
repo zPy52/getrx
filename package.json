@@ -1,6 +1,6 @@
 {
   "name": "getrx",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "Sublimely simple state management library for React.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -24,6 +24,7 @@
     "hooks"
   ],
   "author": "Antonio Peña Peña",
+  "license": "Apache-2.0",
   "devDependencies": {
     "@types/node": "^24.0.3",
     "@types/react": "^19.1.8",
