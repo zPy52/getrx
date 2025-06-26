@@ -5,66 +5,90 @@
 
 Sublimely simple state management for React.
 
-`getrx` provides a minimal and intuitive API for managing state in your React applications. It's built with simplicity and performance in mind, leveraging the power of React hooks and classes to create a state management solution that is both easy to learn and powerful enough for complex applications.
+`getrx` provides a minimal and intuitive API for managing state in your React applications. It's built with simplicity and performance in mind, leveraging the power of React hooks and classes to create a state-management solution that is both easy to learn and powerful enough for complex applications.
 
-## Core Concepts
+---
 
--   **Controllers**: State and business logic are encapsulated in `GetRxController` classes. This keeps your UI components clean and focused on rendering.
--   **Observables**: State properties within controllers are wrapped in an `Obs` class, making them observable. Components can subscribe to these observables and automatically re-render when their value changes.
--   **Hooks**: A set of custom React hooks (`useGetPut`, `useOnObsChange`, etc.) provide a simple way to connect your components to controllers and their state.
+## ✨ Quick example
+
+```tsx
+import React from "react";
+import { Obs, useGet, GetRxController } from "getrx";
+
+// 1️⃣ Define a controller that groups state & logic
+class CounterController extends GetRxController {
+  count = new Obs(0);
+
+  increment() {
+    this.count.value = (this.count.value ?? 0) + 1;
+  }
+}
+
+// 2️⃣ Use the controller from a component
+export function Counter() {
+  const controller = useGet(CounterController);
+  const count = controller.count.use(); // re-renders on every update
+
+  return (
+    <button onClick={() => {controller.increment()}}>
+      Clicked {count} times
+    </button>
+  );
+}
+```
+
+That is *all* the code required for a fully-reactive counter – no reducers, no actions, no boilerplate 🎉
+
+---
+
+## Core concepts
+
+* **Controllers** – Plain classes that extend (optionally) `GetRxController` and encapsulate state + business logic.
+* **Observables** – Instances of `Obs<T>` that store a value and notify subscribers when that value changes.
+* **Hooks** – React helpers (`useGet`, `useOnObsChange`, `Obs.use`) that wire everything together.
+
+---
 
 ## Installation
 
 ```bash
 npm install getrx
 ```
-
 or
 
 ```bash
 yarn add getrx
 ```
 
-## Getting Started
+---
 
-Let's build a simple counter to see `getrx` in action.
+## Detailed guide
 
-### 1. Create a Controller
+### 1. Create a controller
 
-First, define a controller that will hold our counter's state and logic. Create a file `CounterController.ts`:
-
-```typescript
-// src/controllers/CounterController.ts
-import { GetRxController, Obs } from "getrx";
+```ts
+// CounterController.ts
+import { Obs, GetRxController } from "getrx";
 
 export class CounterController extends GetRxController {
-  // Create an observable for the count
-  public readonly count = new Obs(0);
+  count = new Obs(0);
 
-  // Method to increment the count
-  public increment() {
-    this.count.emit((this.count.value ?? 0) + 1);
+  increment() {
+    this.count.value = (this.count.value ?? 0) + 1;
   }
 }
 ```
 
-### 2. Connect to a Component
-
-Now, let's use this controller in a React component.
+### 2. Consume it in a component
 
 ```tsx
-// src/components/Counter.tsx
-import React from "react";
-import { useGetPut } from "getrx";
-import { CounterController } from "../controllers/CounterController";
+// Counter.tsx
+import { useGet } from "getrx";
+import { CounterController } from "./CounterController";
 
 export function Counter() {
-  // Get (or create) an instance of our controller
-  const controller = useGetPut("counter", () => new CounterController());
-
-  // Use the .obs() hook on our observable to get its value
-  // The component will re-render whenever the value changes
-  const count = controller.count.obs();
+  const controller = useGet(CounterController);
+  const count = controller.count.use();
 
   return (
     <div>
@@ -75,120 +99,93 @@ export function Counter() {
 }
 ```
 
-And that's it! You have a fully reactive counter. The `useGetPut` hook handles creating and caching the controller instance, and the `count.obs()` method subscribes your component to state updates.
+`useGet` guarantees that *exactly* one `CounterController` instance exists in the whole React tree and cleans it up automatically when the last component using it unmounts.
 
-## API Reference
+---
+
+## API reference
 
 ### `Obs<T>`
+The heart of reactivity.
 
-The `Obs` class is the heart of reactivity in `getrx`.
+| Member | Description |
+| ------ | ----------- |
+| `new Obs(initial?)` | Creates a new observable. |
+| `value / get()` | Read the current value. |
+| `value = x / set(x)` | Update the value **synchronously** and notify listeners. |
+| `on(listener)` | Imperatively subscribe to changes. |
+| `off(listener)` | Remove a listener. |
+| `use()` | React hook that returns the current value and re-renders the component on updates. |
 
--   `new Obs(initialValue)`: Creates a new observable with an initial value.
--   `.value`: A getter to access the current value of the observable.
--   `.emit(newValue)`: Emits a new value to all subscribers.
--   `.obs()`: A custom hook to be used inside a component. It returns the current value and subscribes the component to future updates.
+### `useGet(Controller, options?)`
+Primary hook to retrieve (or lazily create) a controller instance.
 
-### `GetRxController`
-
-This is the base class for all your controllers.
-
--   `onInit()`: An optional async lifecycle method called when the controller is first created and put into the cache. Perfect for fetching initial data.
--   `onClose()`: An optional async lifecycle method called when the controller is removed from the cache. Use this for any cleanup logic.
-
-### `useGetPut(tag, factory, options?)`
-
-This hook is the primary way to interact with controllers in your components. It retrieves an existing controller from the cache or creates a new one.
-
--   `tag: string`: A unique string to identify the controller instance in the cache.
--   `factory: () => T`: A function that returns a new instance of your controller. It's only called if the controller is not already in the cache.
--   `options.persist?: boolean`: (Default: `false`) If `false`, the controller is automatically removed from the cache when the last component using it unmounts. If `true`, it will persist in the cache until manually removed.
-
-### `useGetFind(tag)`
-
-Retrieves a controller from the cache if it exists, but does not create a new one. Returns `undefined` if the controller is not found.
-
-```tsx
-const controller = useGetFind<CounterController>("counter");
-```
+| Option | Type | Default | Purpose |
+| ------ | ---- | ------- | ------- |
+| `tag`  | `string` | `undefined` | Differentiates multiple instances of the same class (`TodoController-inbox`, `TodoController-work`, …). |
+| `args` | `any[]`  | `[]` | Constructor arguments forwarded to `new Controller(...args)`. |
 
 ### `useOnObsChange(obs)`
+Lower-level hook used internally by `Obs.use()` – subscribe directly to an `Obs` when you cannot use the convenience method.
 
-The standard hook for subscribing to an `Obs` instance. The `obs.obs()` method is a convenient shortcut for this.
+### `GetRxController`
+Base class that provides two optional lifecycle methods:
 
-```tsx
-const count = useOnObsChange(controller.count);
+| Method | Description |
+| ------ | ----------- |
+| `onInit()`  | Called once immediately after the controller is added to the cache. Supports `async`. |
+| `onClose()` | Called once right before the controller is evicted from the cache. Supports `async`. |
+
+---
+
+## Advanced patterns
+
+### Constructor arguments & tags
+
+```ts
+const userCtrl = useGet(UserController, {
+  tag: "admin-panel",
+  args: [initialUser]
+});
 ```
 
-## Advanced Usage
-
-### Sharing State Between Components
-
-Because controllers are stored in a global cache and identified by tags, sharing state between components is effortless.
-
-Let's create another component that displays the counter value.
+### Sharing state between components
+Because controllers are cached globally (by class + tag), different components can effortlessly share state:
 
 ```tsx
-// src/components/CounterDisplay.tsx
-import React from "react";
-import { useGetPut } from "getrx";
-import { CounterController } from "../controllers/CounterController";
-
-export function CounterDisplay() {
-  // Use the same tag 'counter' to get the *same* instance
-  const controller = useGetPut("counter", () => new CounterController());
-  const count = controller.count.obs();
-
-  return <p>Current count from another component: {count}</p>;
-}
+const counterA = useGet(CounterController); // same instance everywhere
+const counterB = useGet(CounterController, { tag: "sidebar" });
 ```
 
-If you render `<Counter />` and `<CounterDisplay />` in your app, they will both share and react to the same state from the single `CounterController` instance. When you click the button in `<Counter />`, the text in `<CounterDisplay />` will update automatically.
+### Async initialisation
+Put network requests or expensive computations in `onInit` – the hook can be `async`:
 
-### Asynchronous Actions
-
-The `onInit` lifecycle method in a `GetRxController` is the perfect place for asynchronous operations like fetching data.
-
-```typescript
-// src/controllers/UserController.ts
-import { GetRxController, Obs } from "getrx";
-
-interface User {
-  name: string;
-}
-
-export class UserController extends GetRxController {
-  public readonly user = new Obs<User | undefined>();
-  public readonly isLoading = new Obs(true);
+```ts
+class UserController extends GetRxController {
+  user = new Obs<User>();
+  loading = new Obs(true);
 
   async onInit() {
-    try {
-      const response = await fetch("https://api.example.com/user");
-      const data = await response.json();
-      this.user.emit(data);
-    } catch (e) {
-      console.error("Failed to fetch user", e);
-    } finally {
-      this.isLoading.emit(false);
-    }
+    const data = await fetchUser();
+    this.user.value = data;
+    this.loading.value = false;
   }
 }
 ```
 
-```tsx
-// src/components/UserInfo.tsx
-import React from "react";
-import { useGetPut } from "getrx";
-import { UserController } from "../controllers/UserController";
+---
 
-export function UserInfo() {
-  const controller = useGetPut("user", () => new UserController());
-  const user = controller.user.obs();
-  const isLoading = controller.isLoading.obs();
+## 📜 Changelog
 
-  if (isLoading) {
-    return <p>Loading...</p>;
-  }
+### 0.2.0 (current)
+* **Renamed** `useGetPut` → **`useGet`**.
+* **Removed** `useGetFind` – you can now call `Get.find` directly for rare edge-cases.
+* **Changed** observable API:
+  * `obs()` → **`use()`** inside components.
+  * `emit()` → **`set()`** for updating the value.
+* Added support for *constructor arguments* (`args`) and *tag suffixes* (`tag`) in `useGet`.
 
-  return <div>Hello, {user?.name}</div>;
-}
-```
+---
+
+## License
+Apache-2.0

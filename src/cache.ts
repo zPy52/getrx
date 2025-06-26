@@ -1,12 +1,18 @@
 import type { GetRxController } from "./controller";
 
 /**
- * Internal singleton cache for storing instances of classes extending GetRxController.
- * This cache is not exported from the module; only the React hooks interact with it,
- * ensuring it is only used within the `getrx` package.
+ * Simple **process-wide** registry that stores controller singletons.
  *
- * The cache key is a user-provided tag, allowing multiple cached instances of the same
- * class if desired.
+ * The cache is *not* exported outside of the `getrx` package – public consumers
+ * interact with it exclusively through the React hooks (`useGet`) or via the
+ * facade methods exposed on the default export (`Get`).  Hiding the
+ * implementation detail prevents accidental misuse (e.g. leaking controllers
+ * or bypassing lifecycle hooks).
+ *
+ * A controller instance is uniquely identified by **its class name** plus an
+ * optional *tag* suffix – this allows multiple isolated instances of the same
+ * class to coexist when needed (`TodoController-listA`,
+ * `TodoController-listB`, …).
  */
 export class Get {
   /** The backing map for the cache */
@@ -18,11 +24,13 @@ export class Get {
   private constructor() {}
 
   /* ----------------------------------------------------------------------- */
-  /* Helpers                                                                */
+  /* Internal helpers                                                       */
   /* ----------------------------------------------------------------------- */
   /**
-   * Validates and returns the cache key.
-   * @param tag - A non-empty string used as the cache key.
+   * Ensures that the generated cache key is a non-empty string.
+   *
+   * While the method is trivial, centralising the check avoids repeated
+   * defensive code across the public API.
    */
   private static makeKey(tag: string): string {
     if (!tag || typeof tag !== "string") {
@@ -32,9 +40,9 @@ export class Get {
   }
 
   /**
-   * Calls the provided function, awaiting it if it returns a Promise.
-   * Errors are caught and logged.
-   * @param fn - Optional function to call, possibly async.
+   * Utility to call a (possibly async) lifecycle method **without** propagating
+   * any thrown errors – they are caught and printed to the console instead so
+   * that a faulty controller cannot break unrelated parts of the app.
    */
   private static async callMaybeAsync(fn?: () => void | Promise<void>) {
     if (typeof fn === "function") {
@@ -47,11 +55,15 @@ export class Get {
   }
 
   /* --------------------------------------------------------------------- */
-  /*  Helpers used by new hooks API                                        */
+  /*  Helpers used by the public hooks API                                 */
   /* --------------------------------------------------------------------- */
 
   /**
-   * Generates the final cache key for a controller class plus optional tag.
+   * Generates the canonical cache key for the given controller class and tag.
+   *
+   * Examples:
+   *  • `UserController`          → `UserController`
+   *  • `UserController`, "admin" → `UserController-admin`
    */
   private static buildTag(
     ControllerClass: new (...args: any[]) => GetRxController,
@@ -62,8 +74,9 @@ export class Get {
   }
 
   /**
-   * Finds a cached controller instance identified by a controller class and
-   * optional tag suffix.
+   * Pure lookup that **never** creates new instances.
+   *
+   * @returns `undefined` when the controller is not found.
    */
   public static find<T extends GetRxController>(
     ControllerClass: new (...args: any[]) => T,
@@ -74,8 +87,13 @@ export class Get {
   }
 
   /**
-   * Retrieves a cached controller instance or creates & caches a new one. The
-   * controller is instantiated automatically; no factory function is needed.
+   * Returns an existing cached controller **or** constructs a new one using
+   * `new ControllerClass(...args)` and stores it.
+   *
+   * @param ControllerClass – Concrete class extending {@link GetRxController}.
+   * @param options.tag      – Optional string to differentiate multiple
+   *                           instances of the same class.
+   * @param options.args     – Arguments to forward to the constructor.
    */
   public static put<T extends GetRxController, Args extends any[] = any[]>(
     ControllerClass: new (...args: Args) => T,
@@ -96,7 +114,8 @@ export class Get {
   }
 
   /**
-   * Removes a cached controller instance, calling `onClose` beforehand.
+   * Evicts the given controller from the cache. If the instance implements
+   * `onClose`, it will be awaited (if async) before removal.
    */
   public static delete<T extends GetRxController>(
     ControllerClass: new (...args: any[]) => T,
@@ -111,7 +130,8 @@ export class Get {
   }
 
   /**
-   * Checks if a cached instance exists for the given controller class & tag.
+   * Convenience helper that only tells whether an entry exists regardless of
+   * its actual value.
    */
   public static exists<T extends GetRxController>(
     ControllerClass: new (...args: any[]) => T,

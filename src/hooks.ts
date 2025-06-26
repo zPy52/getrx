@@ -4,10 +4,14 @@ import type { GetRxController } from "./controller";
 import { useState, useEffect, useCallback, useMemo } from "react";
 
 /**
- * React hook that subscribes to an ObsEmitter and returns its latest value.
+ * React helper used by {@link Obs.use}. Subscribes the calling component to the
+ * given {@link ObsEmitter} so that it re-renders every time the emitter
+ * broadcasts a new value.
  *
- * @param obs   The ObsEmitter instance to subscribe to.
- * @returns     The latest value emitted by the ObsEmitter, or its initial value.
+ * @typeParam T – Value carried by the observable.
+ * @param   obs – Observable to listen to.
+ * @returns The *current* value held by the observable (or `undefined` when no
+ *          value has been emitted yet).
  */
 export function useOnObsChange<T>(obs: ObsEmitter<T>): T | undefined {
   const [value, setValue] = useState<T | undefined>(obs.value);
@@ -32,16 +36,29 @@ export function useOnObsChange<T>(obs: ObsEmitter<T>): T | undefined {
 const refCounts = new Map<string, number>();
 
 /**
- * Retrieves an existing cached controller instance or creates & caches a new
- * one if it doesn't exist.  The instance is kept alive for as long as there is
- * at least one mounted component using it.  Once the last component unmounts
- * the instance is automatically removed from the cache.
+ * Primary bridge between React components and the controller cache.
  *
- * @param ControllerClass  The controller class (must extend GetRxController).
- * @param options          Optional parameters:
- *   - tag:     Extra suffix to differentiate multiple instances (`ClassName-tag`).
- *   - args:    Constructor arguments forwarded to `new ControllerClass(...args)`.
- * @returns               The cached or newly created controller instance.
+ * The hook guarantees that **exactly one** instance of `ControllerClass` exists
+ * for the provided `{tag}` across the whole React tree.  It also tracks how
+ * many mounted components are currently using the instance and automatically
+ * removes it from the cache when the last consumer unmounts.
+ *
+ * @example
+ * ```tsx
+ * // Provide constructor args and a custom tag
+ * const todos = useGet(TodoController, {
+ *   tag: "listA",
+ *   args: [initialTodos]
+ * });
+ * ```
+ *
+ * @typeParam T    – Concrete controller type.
+ * @typeParam Args – Tuple of constructor arguments.
+ * @param ControllerClass – Class extending {@link GetRxController}.
+ * @param options.tag     – Optional tag suffix (default: class name only).
+ * @param options.args    – Arguments forwarded to the constructor when a new
+ *                          instance needs to be created.
+ * @returns The cached or newly created controller instance.
  */
 export function useGet<T extends GetRxController, Args extends any[] = any[]>(
   ControllerClass: new (...args: Args) => T,
