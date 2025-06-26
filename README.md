@@ -172,20 +172,3 @@ class UserController extends GetRxController {
   }
 }
 ```
-
----
-
-## 📜 Changelog
-
-### 0.2.0 (current)
-* **Renamed** `useGetPut` → **`useGet`**.
-* **Removed** `useGetFind` – you can now call `Get.find` directly for rare edge-cases.
-* **Changed** observable API:
-  * `obs()` → **`use()`** inside components.
-  * `emit()` → **`set()`** for updating the value.
-* Added support for *constructor arguments* (`args`) and *tag suffixes* (`tag`) in `useGet`.
-
----
-
-## License
-Apache-2.0
