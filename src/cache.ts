@@ -1,4 +1,3 @@
-import type { GetRxControllerFactory } from "./types";
 import type { GetRxController } from "./controller";
 
 /**
@@ -48,50 +47,62 @@ export class Get {
   }
 
   /* --------------------------------------------------------------------- */
-  /*  Factory-based helpers – used by hooks API that takes `() => T`       */
+  /*  Helpers used by new hooks API                                        */
   /* --------------------------------------------------------------------- */
 
   /**
-   * Finds a cached controller instance by tag.
-   * @param tag - The cache key.
-   * @returns The cached instance, or undefined if not found.
+   * Generates the final cache key for a controller class plus optional tag.
    */
-  public static find<T extends GetRxController>(tag: string): T | undefined {
-    const key = this.makeKey(tag);
+  private static buildTag(
+    ControllerClass: new (...args: any[]) => GetRxController,
+    suffix?: string
+  ): string {
+    const base = ControllerClass.name || "AnonymousController";
+    return suffix ? `${base}-${suffix}` : base;
+  }
+
+  /**
+   * Finds a cached controller instance identified by a controller class and
+   * optional tag suffix.
+   */
+  public static find<T extends GetRxController>(
+    ControllerClass: new (...args: any[]) => T,
+    options: { tag?: string } = {}
+  ): T | undefined {
+    const key = this.makeKey(this.buildTag(ControllerClass, options.tag));
     return this.registry.get(key) as T | undefined;
   }
 
   /**
-   * Retrieves a cached controller instance by tag, or creates and caches a new one using the provided factory.
-   * Calls the instance's onInit method if a new instance is created.
-   * @param tag - The cache key.
-   * @param factory - Factory function to create a new instance if needed.
-   * @returns The cached or newly created instance.
+   * Retrieves a cached controller instance or creates & caches a new one. The
+   * controller is instantiated automatically; no factory function is needed.
    */
-  public static put<T extends GetRxController>(
-    tag: string,
-    factory: GetRxControllerFactory<T>
+  public static put<T extends GetRxController, Args extends any[] = any[]>(
+    ControllerClass: new (...args: Args) => T,
+    options: { tag?: string; args?: Args } = {}
   ): T {
-    const key = this.makeKey(tag);
+    const { tag, args = [] as unknown as Args } = options;
+    const key = this.makeKey(this.buildTag(ControllerClass, tag));
+
     const existing = this.registry.get(key) as T | undefined;
-    
     if (existing) {
       return existing;
     }
-    
-    const instance = factory();
+
+    const instance = new ControllerClass(...(args as unknown as Args));
     this.registry.set(key, instance);
     this.callMaybeAsync(instance.onInit);
     return instance;
   }
 
   /**
-   * Removes a cached controller instance by tag.
-   * Calls the instance's onClose method before removal.
-   * @param tag - The cache key.
+   * Removes a cached controller instance, calling `onClose` beforehand.
    */
-  public static delete<T extends GetRxController>(tag: string): void {
-    const key = this.makeKey(tag);
+  public static delete<T extends GetRxController>(
+    ControllerClass: new (...args: any[]) => T,
+    options: { tag?: string } = {}
+  ): void {
+    const key = this.makeKey(this.buildTag(ControllerClass, options.tag));
     const cached = this.registry.get(key) as T | undefined;
     if (cached) {
       this.callMaybeAsync(cached.onClose);
@@ -99,8 +110,14 @@ export class Get {
     }
   }
 
-  public static exists(tag: string): boolean {
-    const key = this.makeKey(tag);
+  /**
+   * Checks if a cached instance exists for the given controller class & tag.
+   */
+  public static exists<T extends GetRxController>(
+    ControllerClass: new (...args: any[]) => T,
+    options: { tag?: string } = {}
+  ): boolean {
+    const key = this.makeKey(this.buildTag(ControllerClass, options.tag));
     return this.registry.has(key);
   }
 }

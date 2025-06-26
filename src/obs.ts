@@ -1,5 +1,5 @@
-import type { ObsEmitter, ObsListener } from "./types";
 import { useOnObsChange } from "./hooks";
+import type { ObsEmitter, ObsListener } from "./types";
 
 export class Obs<T> implements ObsEmitter<T> {
   private eventHandlers: ObsListener<T>[] = [];

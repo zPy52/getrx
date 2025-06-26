@@ -1,6 +1,6 @@
 import { Get } from "./cache";
+import type { ObsEmitter } from "./types";
 import type { GetRxController } from "./controller";
-import type { ObsEmitter, GetRxControllerFactory } from "./types";
 import { useState, useEffect, useCallback, useMemo } from "react";
 
 /**
@@ -35,54 +35,42 @@ const refCounts = new Map<string, number>();
  * Retrieves an existing cached controller instance or creates & caches a new
  * one if it doesn't exist.  The instance is kept alive for as long as there is
  * at least one mounted component using it.  Once the last component unmounts
- * the instance is automatically removed from the cache (unless `persist: true`
- * is passed in the `options` parameter).
+ * the instance is automatically removed from the cache.
  *
- * @param tag       The tag to differentiate multiple instances.
- * @param factory   Factory function used to create the controller when it does
- *                  not yet exist in the cache.
- * @param options   Optional options object.  If `persist` is true the
- *                  controller is NOT deleted when the last component unmounts.
- * @returns         The cached or newly created controller instance.
+ * @param ControllerClass  The controller class (must extend GetRxController).
+ * @param options          Optional parameters:
+ *   - tag:     Extra suffix to differentiate multiple instances (`ClassName-tag`).
+ *   - args:    Constructor arguments forwarded to `new ControllerClass(...args)`.
+ * @returns               The cached or newly created controller instance.
  */
-export function useGet<T extends GetRxController>(
-  tag: string,
-  factory: GetRxControllerFactory<T>,
-  options: { persist?: boolean } = {}
+export function useGet<T extends GetRxController, Args extends any[] = any[]>(
+  ControllerClass: new (...args: Args) => T,
+  options: { tag?: string; args?: Args; } = {}
 ): T {
-  // Memoise the factory so that its identity stays stable across renders.
-  const factoryCallback = useCallback(factory, []);
+  const { tag: tagSuffix, args = [] as unknown as Args } = options;
 
-  // Either fetch the existing controller or create & cache a new one.
+  const baseTag = ControllerClass.name || "AnonymousController";
+  const tag = tagSuffix ? `${baseTag}-${tagSuffix}` : baseTag;
+
+  // Either fetch an existing controller or create a new one.
   const controller = useMemo(() => {
-    if (Get.exists(tag)) {
-      return Get.find<T>(tag) as T;
-    }
-    return Get.put<T>(tag, factoryCallback);
-  }, [tag, factoryCallback]);
+    return Get.put<T>(ControllerClass, { tag: tagSuffix, args });
+  }, [ControllerClass, tagSuffix]);
 
-  const { persist = false } = options;
-
-  // Keep a reference count so we know when the very last component using this
-  // controller unmounts.  At that point – and only then – we can safely delete
-  // it from the cache (unless it was marked as persistent).
+  // Reference counting and automatic cache eviction.
   useEffect(() => {
-    // Increment on mount.
     refCounts.set(tag, (refCounts.get(tag) ?? 0) + 1);
 
-    // Decrement on unmount and delete when it reaches zero.
     return () => {
       const current = (refCounts.get(tag) ?? 1) - 1;
       if (current <= 0) {
         refCounts.delete(tag);
-        if (!persist) {
-          Get.delete<T>(tag);
-        }
+        Get.delete<T>(ControllerClass, { tag: tagSuffix });
       } else {
         refCounts.set(tag, current);
       }
     };
-  }, [tag, persist]);
+  }, [tag, ControllerClass, tagSuffix]);
 
   return controller;
 }
