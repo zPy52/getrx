@@ -1,6 +1,6 @@
 {
   "name": "getrx",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Sublimely simple state management library for React.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
