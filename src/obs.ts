@@ -57,8 +57,7 @@ export class Obs<T> implements ObsEmitter<T> {
    */
   public set(value: T) {
     this.currentValue = value;
-    this.eventHandlers.forEach(listener => listener(value));
-    
+    this.eventHandlers.forEach(listener => listener(value));  
   }
 
   /**
