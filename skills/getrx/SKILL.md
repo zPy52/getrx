@@ -257,7 +257,7 @@ class DataController extends GetRxController {
 
 ### Cross-Controller Communication
 
-Use `Get.find()` to look up another controller imperatively:
+Use `Get.find()` to look up another controller imperatively. Keep the lookup local at the point of use so intertwined flows stay easy to read:
 
 ```ts
 class OrderController extends GetRxController {
@@ -268,6 +268,29 @@ class OrderController extends GetRxController {
   }
 }
 ```
+
+When reaching into a sibling API (for example `ui.flush()` from message logic), prefer explicit local variables:
+
+```ts
+class MessagesController extends GetRxController {
+  onToolCall() {
+    const ui = Get.find(ChatController)?.ui;
+    ui?.flush();
+  }
+}
+```
+
+If your app uses tagged controller instances, always pass the same tag in `Get.find` that was used in `useGet`:
+
+```ts
+// Component side
+const chat = useGet(ChatController, { tag: roomId, args: [roomId] });
+
+// Imperative lookup side
+const chat = Get.find(ChatController, { tag: roomId });
+```
+
+Mixing tagged and untagged lookups is a common source of subtle bugs (wrong instance or `undefined`).
 
 ### Derived / Computed Values
 
