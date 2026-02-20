@@ -109,7 +109,7 @@ export class Get {
 
     const instance = new ControllerClass(...(args as unknown as Args));
     this.registry.set(key, instance);
-    this.callMaybeAsync(instance.onInit);
+    this.callMaybeAsync(() => instance.onInit?.());
     return instance;
   }
 
@@ -124,7 +124,7 @@ export class Get {
     const key = this.makeKey(this.buildTag(ControllerClass, options.tag));
     const cached = this.registry.get(key) as T | undefined;
     if (cached) {
-      this.callMaybeAsync(cached.onClose);
+      this.callMaybeAsync(() => cached.onClose?.());
       this.registry.delete(key);
     }
   }
