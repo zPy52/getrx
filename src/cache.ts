@@ -1,4 +1,5 @@
 import type { GetRxController } from "./controller";
+import { getControllerKey, type GetRxControllerClass } from "./controller-key";
 
 /**
  * Simple **process-wide** registry that stores controller singletons.
@@ -7,12 +8,12 @@ import type { GetRxController } from "./controller";
  * interact with it exclusively through the React hooks (`useGet`) or via the
  * facade methods exposed on the default export (`Get`).  Hiding the
  * implementation detail prevents accidental misuse (e.g. leaking controllers
- * or bypassing lifecycle hooks).
+ * or bypassing the cache).
  *
- * A controller instance is uniquely identified by **its class name** plus an
- * optional *tag* suffix – this allows multiple isolated instances of the same
- * class to coexist when needed (`TodoController-listA`,
- * `TodoController-listB`, …).
+ * A controller instance is uniquely identified by its constructor object plus
+ * an optional *tag* suffix. The readable portion of the internal key may reuse
+ * `displayName` or `name`, but uniqueness comes from the constructor identity
+ * so production minification cannot cause collisions.
  */
 export class Get {
   /** The backing map for the cache */
@@ -39,39 +40,9 @@ export class Get {
     return tag;
   }
 
-  /**
-   * Utility to call a (possibly async) lifecycle method **without** propagating
-   * any thrown errors – they are caught and printed to the console instead so
-   * that a faulty controller cannot break unrelated parts of the app.
-   */
-  private static async callMaybeAsync(fn?: () => void | Promise<void>) {
-    if (typeof fn === "function") {
-      // Call the function; if it returns a promise, await and catch errors.
-      const result = fn();
-      if (result instanceof Promise) {
-        await result.catch(console.error);
-      }
-    }
-  }
-
   /* --------------------------------------------------------------------- */
   /*  Helpers used by the public hooks API                                 */
   /* --------------------------------------------------------------------- */
-
-  /**
-   * Generates the canonical cache key for the given controller class and tag.
-   *
-   * Examples:
-   *  • `UserController`          → `UserController`
-   *  • `UserController`, "admin" → `UserController-admin`
-   */
-  private static buildTag(
-    ControllerClass: new (...args: any[]) => GetRxController,
-    suffix?: string
-  ): string {
-    const base = ControllerClass.name || "AnonymousController";
-    return suffix ? `${base}-${suffix}` : base;
-  }
 
   /**
    * Pure lookup that **never** creates new instances.
@@ -79,10 +50,10 @@ export class Get {
    * @returns `undefined` when the controller is not found.
    */
   public static find<T extends GetRxController>(
-    ControllerClass: new (...args: any[]) => T,
-    options: { tag?: string } = {}
+    ControllerClass: GetRxControllerClass<T>,
+    options: { tag?: string } = {},
   ): T | undefined {
-    const key = this.makeKey(this.buildTag(ControllerClass, options.tag));
+    const key = this.makeKey(getControllerKey(ControllerClass, options.tag));
     return this.registry.get(key) as T | undefined;
   }
 
@@ -96,11 +67,11 @@ export class Get {
    * @param options.args     – Arguments to forward to the constructor.
    */
   public static put<T extends GetRxController, Args extends any[] = any[]>(
-    ControllerClass: new (...args: Args) => T,
-    options: { tag?: string; args?: Args } = {}
+    ControllerClass: GetRxControllerClass<T, Args>,
+    options: { tag?: string; args?: Args } = {},
   ): T {
     const { tag, args = [] as unknown as Args } = options;
-    const key = this.makeKey(this.buildTag(ControllerClass, tag));
+    const key = this.makeKey(getControllerKey(ControllerClass, tag));
 
     const existing = this.registry.get(key) as T | undefined;
     if (existing) {
@@ -109,24 +80,18 @@ export class Get {
 
     const instance = new ControllerClass(...(args as unknown as Args));
     this.registry.set(key, instance);
-    this.callMaybeAsync(() => instance.onInit?.());
     return instance;
   }
 
   /**
-   * Evicts the given controller from the cache. If the instance implements
-   * `onClose`, it will be awaited (if async) before removal.
+   * Evicts the given controller from the cache.
    */
   public static delete<T extends GetRxController>(
-    ControllerClass: new (...args: any[]) => T,
-    options: { tag?: string } = {}
+    ControllerClass: GetRxControllerClass<T>,
+    options: { tag?: string } = {},
   ): void {
-    const key = this.makeKey(this.buildTag(ControllerClass, options.tag));
-    const cached = this.registry.get(key) as T | undefined;
-    if (cached) {
-      this.callMaybeAsync(() => cached.onClose?.());
-      this.registry.delete(key);
-    }
+    const key = this.makeKey(getControllerKey(ControllerClass, options.tag));
+    this.registry.delete(key);
   }
 
   /**
@@ -134,10 +99,10 @@ export class Get {
    * its actual value.
    */
   public static exists<T extends GetRxController>(
-    ControllerClass: new (...args: any[]) => T,
-    options: { tag?: string } = {}
+    ControllerClass: GetRxControllerClass<T>,
+    options: { tag?: string } = {},
   ): boolean {
-    const key = this.makeKey(this.buildTag(ControllerClass, options.tag));
+    const key = this.makeKey(getControllerKey(ControllerClass, options.tag));
     return this.registry.has(key);
   }
 }

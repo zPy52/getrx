@@ -1,6 +1,7 @@
 import { Get } from "./cache";
 import type { ObsEmitter } from "./types";
 import type { GetRxController } from "./controller";
+import { getControllerKey, type GetRxControllerClass } from "./controller-key";
 import { useState, useEffect, useCallback, useMemo } from "react";
 
 /**
@@ -31,13 +32,13 @@ export function useOnObsChange<T>(obs: ObsEmitter<T>): T | undefined {
 }
 
 // A module-level map that keeps track of how many mounted components are currently
-// using a given controller (identified by its tag).  When the counter reaches
-// zero the controller can be safely removed from the cache.
+// using a given controller (identified by its shared controller key). When the
+// counter reaches zero the controller can be safely removed from the cache.
 const refCounts = new Map<string, number>();
 
-// Map used to hold pending deletion timers for each tag so that we can cancel
-// them if a component re-mounts shortly after unmounting (e.g. during a React
-// suspense fallback or a quick navigation).
+// Map used to hold pending deletion timers for each controller key so that we
+// can cancel them if a component re-mounts shortly after unmounting (e.g.
+// during a React suspense fallback or a quick navigation).
 const deletionTimers = new Map<string, NodeJS.Timeout>();
 
 /** Amount of time (in ms) we keep an *unreferenced* controller alive before
@@ -68,13 +69,11 @@ const GC_GRACE_PERIOD_MS = 5000;
  * ```
  */
 export function useGet<T extends GetRxController, Args extends any[] = any[]>(
-  ControllerClass: new (...args: Args) => T,
-  options: { tag?: string; args?: Args } = {}
+  ControllerClass: GetRxControllerClass<T, Args>,
+  options: { tag?: string; args?: Args } = {},
 ): T {
   const { tag: tagSuffix, args = [] as unknown as Args } = options;
-
-  const baseTag = ControllerClass.name || "AnonymousController";
-  const tag = tagSuffix ? `${baseTag}-${tagSuffix}` : baseTag;
+  const controllerKey = getControllerKey(ControllerClass, tagSuffix);
 
   // Either fetch an existing controller or create a new one.
   const controller = useMemo(() => {
@@ -83,34 +82,37 @@ export function useGet<T extends GetRxController, Args extends any[] = any[]>(
 
   // Reference counting with delayed eviction to avoid race conditions.
   useEffect(() => {
-    // Cancel any pending eviction for this tag – we're alive again!
-    const pending = deletionTimers.get(tag);
+    // Cancel any pending eviction for this controller key – we're alive again!
+    const pending = deletionTimers.get(controllerKey);
     if (pending) {
       clearTimeout(pending);
-      deletionTimers.delete(tag);
+      deletionTimers.delete(controllerKey);
     }
 
-    refCounts.set(tag, (refCounts.get(tag) ?? 0) + 1);
+    refCounts.set(
+      controllerKey,
+      (refCounts.get(controllerKey) ?? 0) + 1,
+    );
 
     return () => {
-      const current = (refCounts.get(tag) ?? 1) - 1;
+      const current = (refCounts.get(controllerKey) ?? 1) - 1;
       if (current <= 0) {
-        refCounts.delete(tag);
+        refCounts.delete(controllerKey);
 
         // Defer actual deletion by GC_GRACE_PERIOD_MS.
         const timer = setTimeout(() => {
-          if (!refCounts.has(tag)) {
+          if (!refCounts.has(controllerKey)) {
             Get.delete<T>(ControllerClass, { tag: tagSuffix });
           }
-          deletionTimers.delete(tag);
+          deletionTimers.delete(controllerKey);
         }, GC_GRACE_PERIOD_MS);
 
-        deletionTimers.set(tag, timer);
+        deletionTimers.set(controllerKey, timer);
       } else {
-        refCounts.set(tag, current);
+        refCounts.set(controllerKey, current);
       }
     };
-  }, [tag, ControllerClass, tagSuffix]);
+  }, [controllerKey, ControllerClass, tagSuffix]);
 
   return controller;
 }

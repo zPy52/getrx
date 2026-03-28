@@ -38,12 +38,12 @@ const query = new Obs("");
 const results = new Obs<SearchResult[]>([]);
 
 function SearchPage() {
-  const q = query.use();  // no lifecycle, no cleanup, leaks memory
+  const q = query.use();  // no controller cache, no shared cleanup, leaks memory
   // ...
 }
 ```
 
-Standalone `Obs` objects bypass the `Get` cache entirely, so they never receive `onInit`/`onClose` lifecycle calls, are never garbage-collected, and cannot be shared safely across components via `useGet`.
+Standalone `Obs` objects bypass the `Get` cache entirely, so they are never managed by `useGet`, are never garbage-collected, and cannot be shared safely across components via `useGet`.
 
 ## Creating Controllers
 
@@ -70,24 +70,30 @@ class TodoController extends GetRxController {
 }
 ```
 
-### Lifecycle Hooks
+### Explicit Setup
 
-Use `onInit` for setup (API calls, subscriptions) and `onClose` for teardown. Both support `async`.
+If a controller needs one-time setup or async loading, expose an explicit method and call it from the component that uses the controller.
 
 ```ts
 class UserController extends GetRxController {
-  user = new Obs<User>();
+  user = new Obs<User | null>(null);
   loading = new Obs(true);
 
-  async onInit() {
-    const data = await fetchUser();
-    this.user.value = data;
-    this.loading.value = false;
+  async load() {
+    try {
+      this.user.value = await fetchUser();
+    } finally {
+      this.loading.value = false;
+    }
   }
+}
 
-  onClose() {
-    // Clean up resources, cancel subscriptions, etc.
-  }
+function UserPage() {
+  const controller = useGet(UserController);
+
+  useEffect(() => {
+    void controller.load();
+  }, [controller]);
 }
 ```
 
@@ -120,10 +126,6 @@ class ChatController extends GetRxController {
     super();
     this.roomId = roomId;
   }
-
-  async onInit() {
-    this.messages.value = await api.loadMessages(this.roomId);
-  }
 }
 
 // In a component:
@@ -146,9 +148,11 @@ function Counter() {
 
 ### What useGet Does
 
-1. **Creates or retrieves** a singleton controller instance (by class name + optional tag).
+1. **Creates or retrieves** a singleton controller instance (by controller constructor identity + optional tag).
 2. **Reference-counts** mounted consumers — the controller stays alive as long as at least one component uses it.
-3. **Auto-cleans** the controller (calls `onClose`, removes from cache) after the last consumer unmounts, with a 5-second grace period to survive quick re-mounts.
+3. **Auto-cleans** the controller by removing it from the cache after the last consumer unmounts, with a 5-second grace period to survive quick re-mounts.
+
+Controller identity is constructor-based rather than `class.name`-based, so different controllers do not collide after production minification even if their runtime names match.
 
 ### Tags for Multiple Instances
 
@@ -167,12 +171,12 @@ Without a tag, every call to `useGet(TodoController)` returns the **same** insta
 | Scenario | Approach |
 |---|---|
 | Shared state across components | `useGet(Controller)` |
-| Component-scoped state with lifecycle | `useGet(Controller, { tag: uniqueId })` |
+| Component-scoped state | `useGet(Controller, { tag: uniqueId })` |
 | Multiple instances of the same concern | `useGet(Controller, { tag })` |
 | State that outlives a single component | `useGet(Controller)` — the cache keeps it alive |
 | Ephemeral local UI state (a toggle, an input) | Plain `useState` is fine — no controller needed |
 
-**Rule of thumb:** if the state is reactive, shared, or needs lifecycle hooks, use a controller with `useGet`. If it is trivially local to one component (e.g., a boolean toggle), `useState` is acceptable.
+**Rule of thumb:** if the state is reactive or shared, use a controller with `useGet`. If it is trivially local to one component (e.g., a boolean toggle), `useState` is acceptable.
 
 ## Working with Obs
 
@@ -224,7 +228,7 @@ For non-React code (e.g., inter-controller communication), use `on`/`off`:
 class DashboardController extends GetRxController {
   stats = new Obs<Stats>();
 
-  onInit() {
+  bindAuth() {
     const auth = Get.find(AuthController);
     auth?.token.on((token) => {
       if (token) this.loadStats(token);
@@ -243,7 +247,7 @@ class DataController extends GetRxController {
   loading = new Obs(true);
   error = new Obs<string | null>(null);
 
-  async onInit() {
+  async load() {
     try {
       this.data.value = await fetchItems();
     } catch (e) {

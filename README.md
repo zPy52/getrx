@@ -99,7 +99,7 @@ export function Counter() {
 }
 ```
 
-`useGet` guarantees that *exactly* one `CounterController` instance exists in the whole React tree and cleans it up automatically when the last component using it unmounts.
+`useGet` guarantees that *exactly* one `CounterController` instance exists in the whole React tree for a given controller constructor and optional tag, and cleans it up automatically when the last component using it unmounts.
 
 ---
 
@@ -125,16 +125,13 @@ Primary hook to retrieve (or lazily create) a controller instance.
 | `tag`  | `string` | `undefined` | Differentiates multiple instances of the same class (`TodoController-inbox`, `TodoController-work`, …). |
 | `args` | `any[]`  | `[]` | Constructor arguments forwarded to `new Controller(...args)`. |
 
+Instances are identified internally by the controller constructor object plus the optional `tag`, not by `class.name`, so production minification does not cause collisions between different controllers.
+
 ### `useOnObsChange(obs)`
 Lower-level hook used internally by `Obs.use()` – subscribe directly to an `Obs` when you cannot use the convenience method.
 
 ### `GetRxController`
-Base class that provides two optional lifecycle methods:
-
-| Method | Description |
-| ------ | ----------- |
-| `onInit()`  | Called once immediately after the controller is added to the cache. Supports `async`. |
-| `onClose()` | Called once right before the controller is evicted from the cache. Supports `async`. |
+Base class for all controllers. Add state, observables, methods, constructor logic, and any domain-specific helpers you need.
 
 ---
 
@@ -150,25 +147,39 @@ const userCtrl = useGet(UserController, {
 ```
 
 ### Sharing state between components
-Because controllers are cached globally (by class + tag), different components can effortlessly share state:
+Because controllers are cached globally (by controller identity + tag), different components can effortlessly share state:
 
 ```tsx
 const counterA = useGet(CounterController); // same instance everywhere
 const counterB = useGet(CounterController, { tag: "sidebar" });
 ```
 
-### Async initialisation
-Put network requests or expensive computations in `onInit` – the hook can be `async`:
+This also means two different controller classes remain isolated even if a bundler minifies both runtime names to the same short value.
 
-```ts
+### Explicit setup
+If a controller needs startup work, expose an explicit method and call it from the component that uses the controller:
+
+```tsx
+import { useEffect } from "react";
+
 class UserController extends GetRxController {
-  user = new Obs<User>();
+  user = new Obs<User | null>(null);
   loading = new Obs(true);
 
-  async onInit() {
-    const data = await fetchUser();
-    this.user.value = data;
-    this.loading.value = false;
+  async load() {
+    try {
+      this.user.value = await fetchUser();
+    } finally {
+      this.loading.value = false;
+    }
   }
+}
+
+function UserPage() {
+  const controller = useGet(UserController);
+
+  useEffect(() => {
+    void controller.load();
+  }, [controller]);
 }
 ```

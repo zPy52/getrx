@@ -1,6 +1,6 @@
 {
   "name": "getrx",
-  "version": "0.2.6",
+  "version": "1.0.0",
   "description": "Sublimely simple state management library for React.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -12,7 +12,8 @@
   },
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "test": "tsx --test tests/**/*.test.ts"
   },
   "keywords": [
     "react",
@@ -29,6 +30,8 @@
   "devDependencies": {
     "@types/node": "^24.0.3",
     "@types/react": "^19.1.8",
+    "react-test-renderer": "^19.1.0",
+    "tsx": "^4.20.6",
     "typescript": "^5.8.3"
   },
   "dependencies": {
